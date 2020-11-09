@@ -497,9 +497,9 @@ void PlanGenerator::Visit(const InnerIndexJoin *op) {
 
   auto proj_schema = std::make_unique<planner::OutputSchema>(std::move(columns));
   auto comb_pred = parser::ExpressionUtil::JoinAnnotatedExprs(op->GetJoinPredicates());
-  auto eval_pred = parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(comb_pred));
-  auto join_predicate =
-      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval_pred), children_expr_map_).release();
+  auto eval_pred =
+      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(comb_pred), children_expr_map_);
+  auto join_predicate = parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(eval_pred)).release();
   RegisterPointerCleanup<parser::AbstractExpression>(join_predicate, true, true);
 
   auto type = op->GetScanType();
@@ -557,9 +557,10 @@ void PlanGenerator::Visit(const InnerNLJoin *op) {
   auto proj_schema = GenerateProjectionForJoin();
 
   auto comb_pred = parser::ExpressionUtil::JoinAnnotatedExprs(op->GetJoinPredicates());
-  auto eval_pred = parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(comb_pred));
-  auto join_predicate =
-      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval_pred), children_expr_map_).release();
+
+  auto eval_pred =
+      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(comb_pred), children_expr_map_);
+  auto join_predicate = parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(eval_pred)).release();
   RegisterPointerCleanup<parser::AbstractExpression>(join_predicate, true, true);
 
   output_plan_ = planner::NestedLoopJoinPlanNode::Builder()
@@ -590,9 +591,9 @@ void PlanGenerator::Visit(const InnerHashJoin *op) {
 
   auto comb_pred = parser::ExpressionUtil::JoinAnnotatedExprs(op->GetJoinPredicates());
   auto eval_pred =
-      parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(comb_pred.get()));
+      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(comb_pred.get()), children_expr_map_);
   auto join_predicate =
-      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval_pred.get()), children_expr_map_).release();
+      parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(eval_pred.get())).release();
   RegisterPointerCleanup<parser::AbstractExpression>(join_predicate, true, true);
 
   auto builder = planner::HashJoinPlanNode::Builder();
@@ -622,9 +623,9 @@ void PlanGenerator::Visit(const LeftHashJoin *op) {
 
   auto comb_pred = parser::ExpressionUtil::JoinAnnotatedExprs(op->GetJoinPredicates());
   auto eval_pred =
-      parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(comb_pred.get()));
+      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(comb_pred.get()), children_expr_map_);
   auto join_predicate =
-      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval_pred.get()), children_expr_map_).release();
+      parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(eval_pred.get())).release();
   RegisterPointerCleanup<parser::AbstractExpression>(join_predicate, true, true);
 
   auto builder = planner::HashJoinPlanNode::Builder();
@@ -666,9 +667,10 @@ void PlanGenerator::Visit(const LeftSemiHashJoin *op) {
 
   auto comb_pred = parser::ExpressionUtil::JoinAnnotatedExprs(op->GetJoinPredicates());
   auto eval_pred =
-      parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(comb_pred.get()));
+      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(comb_pred.get()), children_expr_map_);
   auto join_predicate =
-      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval_pred.get()), children_expr_map_).release();
+      parser::ExpressionUtil::EvaluateExpression(children_expr_map_, common::ManagedPointer(eval_pred)).release();
+
   RegisterPointerCleanup<parser::AbstractExpression>(join_predicate, true, true);
 
   auto builder = planner::HashJoinPlanNode::Builder();
@@ -712,9 +714,9 @@ void PlanGenerator::BuildAggregatePlan(
     for (auto &col : *groupby_cols) {
       gb_map[col] = offset;
 
-      auto eval = parser::ExpressionUtil::EvaluateExpression({child_expr_map}, col);
-      auto gb_term =
-          parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval), {child_expr_map}).release();
+      auto eval =
+          parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(col), {child_expr_map});
+      auto gb_term = parser::ExpressionUtil::EvaluateExpression({child_expr_map}, common::ManagedPointer(eval)).release();
       RegisterPointerCleanup<parser::AbstractExpression>(gb_term, true, true);
       builder.AddGroupByTerm(common::ManagedPointer(gb_term));
       offset++;
@@ -753,9 +755,10 @@ void PlanGenerator::BuildAggregatePlan(
   auto output_schema = std::make_unique<planner::OutputSchema>(std::move(columns));
 
   // Prepare having clause
-  auto eval_have = parser::ExpressionUtil::EvaluateExpression({output_expr_map}, having_predicate);
+  auto eval_have = parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(having_predicate),
+                                                              {output_expr_map});
   auto predicate =
-      parser::ExpressionUtil::ConvertExprCVNodes(common::ManagedPointer(eval_have), {output_expr_map}).release();
+      parser::ExpressionUtil::EvaluateExpression({output_expr_map}, common::ManagedPointer(eval_have)).release();
   RegisterPointerCleanup<parser::AbstractExpression>(predicate, true, true);
 
   builder.SetOutputSchema(std::move(output_schema));
