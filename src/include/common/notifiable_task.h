@@ -148,7 +148,7 @@ class NotifiableTask : public DedicatedThreadTask {
   /**
    * Exits the event loop
    */
-  void ExitLoop() { terminate_->send(); }
+  void ExitLoop() { terminate_.send(); }
 
  protected:
   /** Event loop for the current thread */
@@ -158,7 +158,7 @@ class NotifiableTask : public DedicatedThreadTask {
   /** Callback to terminate event loop */
   static void TerminateCallback(ev::async &event, int revents);  // NOLINT
 
-  ev::async *terminate_;
+  ev::async terminate_;
   const int task_id_;
 
   // struct event and lifecycle management

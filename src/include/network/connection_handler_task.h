@@ -73,7 +73,7 @@ class ConnectionHandlerTask : public common::NotifiableTask {
    * each pair is represents <connection fd, ProtocolInterpreter>
    */
   std::deque<std::pair<int, std::unique_ptr<ProtocolInterpreter>>> jobs_;
-  ev::async *notify_event_;
+  ev::async notify_event_;
   common::ManagedPointer<ConnectionHandleFactory> connection_handle_factory_;
 };
 

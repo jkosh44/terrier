@@ -85,7 +85,7 @@ class ConnectionDispatcherTask : public common::NotifiableTask {
   const common::ManagedPointer<ProtocolInterpreterProvider> interpreter_provider_;
   std::vector<common::ManagedPointer<ConnectionHandlerTask>> handlers_;
   std::atomic<uint64_t> next_handler_;
-  ev::sig *sighup_event_;
+  ev::sig sighup_event_;
 };
 
 }  // namespace noisepage::network

@@ -6,17 +6,15 @@ namespace noisepage::network {
 
 ConnectionHandlerTask::ConnectionHandlerTask(const int task_id,
                                              common::ManagedPointer<ConnectionHandleFactory> connection_handle_factory)
-    : NotifiableTask(std::make_unique<ev::dynamic_loop>(), task_id),
+    : NotifiableTask(std::make_unique<ev::dynamic_loop>(), task_id), notify_event_(*loop_),
       connection_handle_factory_(connection_handle_factory) {
   // Register an event that needs to be explicitly activated. When the event is handled, HandleDispatch() is called.
-  notify_event_ = new ev::async(*loop_);
-  notify_event_->set<&ConnectionHandlerTask::HandleDispatchCallback>(this);
-  notify_event_->start();
+  notify_event_.set<&ConnectionHandlerTask::HandleDispatchCallback>(this);
+  notify_event_.start();
 }
 
 ConnectionHandlerTask::~ConnectionHandlerTask() {
-  notify_event_->stop();
-  delete notify_event_;
+  notify_event_.stop();
 }
 
 void ConnectionHandlerTask::Notify(int conn_fd, std::unique_ptr<ProtocolInterpreter> protocol_interpreter) {
@@ -28,7 +26,7 @@ void ConnectionHandlerTask::Notify(int conn_fd, std::unique_ptr<ProtocolInterpre
     jobs_.emplace_back(conn_fd, std::move(protocol_interpreter));
   }
   // Signal that there are jobs to be dispatched.
-  notify_event_->send();
+  notify_event_.send();
 }
 
 void ConnectionHandlerTask::HandleDispatchCallback(ev::async &event, int /*unused*/) {

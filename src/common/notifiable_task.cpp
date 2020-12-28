@@ -5,14 +5,13 @@
 namespace noisepage::common {
 
 NotifiableTask::NotifiableTask(std::unique_ptr<ev::loop_ref> loop, int task_id)
-    : loop_(std::move(loop)), task_id_(task_id) {
+    : loop_(std::move(loop)), terminate_(*loop_), task_id_(task_id) {
   if (*loop_ == nullptr) {
     throw NETWORK_PROCESS_EXCEPTION("Unable to create event loop");
   }
 
-  terminate_ = new ev::async(*loop_);
-  terminate_->set<&NotifiableTask::TerminateCallback>(loop_.get());
-  terminate_->start();
+  terminate_.set<&NotifiableTask::TerminateCallback>(loop_.get());
+  terminate_.start();
 }
 
 NotifiableTask::~NotifiableTask() {
@@ -24,8 +23,7 @@ NotifiableTask::~NotifiableTask() {
     event->stop();
     delete event;
   }
-  terminate_->stop();
-  delete terminate_;
+  terminate_.stop();
   ev_loop_destroy(*loop_);
 }
 

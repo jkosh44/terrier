@@ -24,7 +24,8 @@ ConnectionDispatcherTask::ConnectionDispatcherTask(
       connection_handle_factory_(connection_handle_factory),
       thread_registry_(thread_registry),
       interpreter_provider_(interpreter_provider),
-      next_handler_(0) {
+      next_handler_(0),
+      sighup_event_(*loop_) {
   NOISEPAGE_ASSERT(num_handlers_ > 0, "No workers that connections can be dispatched to.");
 
   // Specific events are then associated with their respective callback functions.
@@ -35,14 +36,12 @@ ConnectionDispatcherTask::ConnectionDispatcherTask(
   }
 
   // Exit the event loop if the terminal launching the server process is closed.
-  sighup_event_ = new ev::sig(*loop_);
-  sighup_event_->set<&ConnectionDispatcherTask::SighupCallback>(this);
-  sighup_event_->start(SIGHUP);
+  sighup_event_.set<&ConnectionDispatcherTask::SighupCallback>(this);
+  sighup_event_.start(SIGHUP);
 }
 
 ConnectionDispatcherTask::~ConnectionDispatcherTask() {
-  sighup_event_->stop();
-  delete sighup_event_;
+  sighup_event_.stop();
 }
 
 void ConnectionDispatcherTask::DispatchConnectionCallback(ev::io &event, int /*unused*/) {
