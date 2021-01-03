@@ -93,9 +93,15 @@ void ChildPropertyDeriver::Visit(const Limit *op) {
   // Limit fulfill the internal sort property
   std::vector<PropertySet *> child_input_properties{new PropertySet()};
   auto provided_prop = new PropertySet();
-  if (!op->GetSortExpressions().empty()) {
-    const std::vector<common::ManagedPointer<parser::AbstractExpression>> &exprs = op->GetSortExpressions();
-    const std::vector<OrderByOrderingType> &sorts{op->GetSortAscending()};
+  auto sort_prop = requirements_->GetPropertyOfTypeAs<PropertySort>(PropertyType::SORT);
+  if (sort_prop != nullptr) {
+    std::vector<common::ManagedPointer<parser::AbstractExpression>> exprs;
+    std::vector<OrderByOrderingType> sorts;
+    auto sort_col_size = sort_prop->GetSortColumnSize();
+    for (size_t idx = 0; idx < sort_col_size; idx++) {
+      exprs.push_back(sort_prop->GetSortColumn(idx));
+      sorts.push_back(sort_prop->GetSortAscending(idx));
+    }
     provided_prop->AddProperty(new PropertySort(exprs, sorts));
   }
 

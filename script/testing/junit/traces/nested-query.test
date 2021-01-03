@@ -307,6 +307,30 @@ SELECT sno FROM supplier WHERE sno >= (SELECT MIN(shipment.sno) FROM shipment IN
 ----
 1 values hashing to 1dcca23355272056f04fe8bf20edfce0
 
+query IIIT nosort
+SELECT * FROM shipment WHERE pno IN (SELECT pno FROM part ORDER BY pno LIMIT 2);
+----
+1
+1
+1
+item_11
+2
+1
+1
+item_11
+3
+1
+1
+item_11
+2
+1
+2
+item_12
+3
+1
+3
+item_13
+
 statement ok
 
 
