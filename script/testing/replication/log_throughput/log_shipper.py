@@ -4,6 +4,7 @@ from time import sleep
 import zmq
 from zmq import Socket
 
+from .constants import SIZE_LENGTH, ENDIAN
 from .node_server import ImposterNode
 from ...util.constants import LOG
 
@@ -36,7 +37,6 @@ class LogShipper(ImposterNode):
         ImposterNode.__init__(self, primary_identity, primary_messenger_port, primary_replication_port)
 
         self.log_file = log_file
-        self.log_file_len = 0
 
         # Replica connection used to send messages to replica
         self.replica_dealer_socket = self._create_sending_dealer_socket(self.context, replica_identity,
@@ -50,10 +50,7 @@ class LogShipper(ImposterNode):
         self.recv_thread.start()
 
     def setup(self):
-        self.log_file_len = 0
-        with open(self.log_file, 'rb') as f:
-            for _ in f:
-                self.log_file_len += 1
+        pass
 
     def run(self):
         self.ship()
@@ -68,7 +65,11 @@ class LogShipper(ImposterNode):
         """
         LOG.info("Shipping logs to replica")
         with open(self.log_file, 'rb') as f:
-            for idx, message in enumerate(f):
+            size_bytes = f.read(SIZE_LENGTH)
+            idx = 0
+            while size_bytes:
+                size = int.from_bytes(size_bytes, ENDIAN)
+                message = f.read(size)
                 # Check and dispose of ACKs
                 if self.has_pending_messages(self.replica_dealer_socket, 0):
                     self.recv_log_record_ack()
@@ -79,8 +80,11 @@ class LogShipper(ImposterNode):
                 # This is a bit naive, but we want to ship logs as fast as possible and not spend too long every
                 # iteration checking for dropped messages
                 if idx % 1000 == 0 and idx != 0:
-                    LOG.info(f"Shipping log number {idx} out of {self.log_file_len}")
+                    LOG.info(f"Shipping log number {idx}")
                     self.retry_pending_msgs()
+
+                idx += 1
+                size_bytes = f.read(SIZE_LENGTH)
 
         LOG.info("Waiting for replica to ACK all messages")
 
