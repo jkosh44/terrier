@@ -21,7 +21,7 @@ const char *TxnAppliedMsg::key_applied_txn_id = "applied_txn_id";
 MessageWrapper::MessageWrapper() : underlying_message_(std::make_unique<MessageFormat>()) {}
 
 MessageWrapper::MessageWrapper(std::string_view str)
-    : underlying_message_(std::make_unique<MessageFormat>(common::json::parse(str))) {}
+    : underlying_message_(std::make_unique<MessageFormat>(common::json::from_bson(str))) {}
 
 template <typename T>
 void MessageWrapper::Put(const char *key, T value) {
@@ -49,7 +49,10 @@ std::string MessageWrapper::FromCbor(const std::vector<uint8_t> &cbor) { return 
 
 std::vector<uint8_t> MessageWrapper::ToCbor(std::string_view str) { return common::json::to_cbor(str); }
 
-std::string MessageWrapper::Serialize() const { return underlying_message_->dump(); }
+std::string MessageWrapper::Serialize() const {
+  const auto bson = common::json::to_bson(*underlying_message_);
+  return std::string(reinterpret_cast<const char *>(bson.data()), bson.size());
+}
 
 common::json MessageWrapper::ToJson() const { return *underlying_message_; }
 
