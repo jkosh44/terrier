@@ -53,18 +53,18 @@ class LogSink(ImposterNode):
         self._create_receiving_router_socket(self.sink_context)
         self.primary_dealer_socket = self._create_sending_dealer_socket(self.sink_context, self.primary_identity,
                                                                         self.primary_replication_port)
-        with open(self.log_file, 'w') as f:
+        with open(self.log_file, 'wb') as f:
             while self.is_running():
                 if self.has_pending_messages(self.router_socket, 100):
                     log_record_msg = self.recv_log_record()
-                    f.write(f"{log_record_msg}\n")
+                    f.write(log_record_msg + b'\n')
                     msg_id = self.extract_msg_id(log_record_msg)
                     self.send_ack_msg(msg_id, self.router_socket)
 
             # Drain any additional messages
             while self.has_pending_messages(self.router_socket, 2000):
                 log_record_msg = self.recv_log_record()
-                f.write(f"{log_record_msg}\n")
+                f.write(log_record_msg + b'\n')
                 msg_id = self.extract_msg_id(log_record_msg)
                 self.send_ack_msg(msg_id, self.router_socket)
 
@@ -72,7 +72,7 @@ class LogSink(ImposterNode):
         self.primary_dealer_socket.close()
         self.sink_context.destroy()
 
-    def recv_log_record(self) -> str:
+    def recv_log_record(self) -> bytes:
         """
         Receive a log record message from the primary node (can also be a Notify OAT message)
 

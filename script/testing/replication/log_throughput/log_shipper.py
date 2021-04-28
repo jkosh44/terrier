@@ -4,8 +4,8 @@ from time import sleep
 import zmq
 from zmq import Socket
 
-from ...util.constants import LOG
 from .node_server import ImposterNode
+from ...util.constants import LOG
 
 
 class LogShipper(ImposterNode):
@@ -51,7 +51,7 @@ class LogShipper(ImposterNode):
 
     def setup(self):
         self.log_file_len = 0
-        with open(self.log_file, 'r') as f:
+        with open(self.log_file, 'rb') as f:
             for _ in f:
                 self.log_file_len += 1
 
@@ -67,7 +67,7 @@ class LogShipper(ImposterNode):
         TXN APPLIED messages and block until all transactions have been applied.
         """
         LOG.info("Shipping logs to replica")
-        with open(self.log_file, 'r') as f:
+        with open(self.log_file, 'rb') as f:
             for idx, message in enumerate(f):
                 # Check and dispose of ACKs
                 if self.has_pending_messages(self.replica_dealer_socket, 0):
@@ -95,9 +95,9 @@ class LogShipper(ImposterNode):
         while self.has_pending_messages(self.replica_dealer_socket, 0):
             self.recv_log_record_ack()
         for pending_message in self.pending_log_msgs.values():
-            self.send_msg(["", pending_message], self.replica_dealer_socket)
+            self.send_msg([b"", pending_message], self.replica_dealer_socket)
 
-    def send_log_record(self, log_record_message: str):
+    def send_log_record(self, log_record_message: bytes):
         """
         Send log record message to replica
 
@@ -106,7 +106,7 @@ class LogShipper(ImposterNode):
         log_record_message
             Log record to send (can also be a Notify OAT message)
         """
-        self.send_msg(["", log_record_message], self.replica_dealer_socket)
+        self.send_msg([b"", log_record_message], self.replica_dealer_socket)
         msg_id = self.extract_msg_id(log_record_message)
         self.pending_log_msgs[msg_id] = log_record_message
 
@@ -142,7 +142,7 @@ class LogShipper(ImposterNode):
         if acked_msg_id in self.pending_log_msgs:
             self.pending_log_msgs.pop(acked_msg_id)
 
-    def recv_ack(self, socket: Socket) -> str:
+    def recv_ack(self, socket: Socket) -> bytes:
         """
         Receives an ACK.
 
