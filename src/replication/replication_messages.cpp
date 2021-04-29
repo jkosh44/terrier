@@ -45,10 +45,6 @@ template record_batch_id_t MessageWrapper::Get<record_batch_id_t>(const char *ke
 template msg_id_t MessageWrapper::Get<msg_id_t>(const char *key) const;
 template transaction::timestamp_t MessageWrapper::Get<transaction::timestamp_t>(const char *key) const;
 
-std::string MessageWrapper::FromCbor(const std::vector<uint8_t> &cbor) { return common::json::from_cbor(cbor); }
-
-std::vector<uint8_t> MessageWrapper::ToCbor(std::string_view str) { return common::json::to_cbor(str); }
-
 std::string MessageWrapper::Serialize() const {
   const auto bson = common::json::to_bson(*underlying_message_);
   return std::string(reinterpret_cast<const char *>(bson.data()), bson.size());
@@ -118,14 +114,14 @@ NotifyOATMsg::NotifyOATMsg(ReplicationMessageMetadata metadata, record_batch_id_
 MessageWrapper RecordsBatchMsg::ToMessageWrapper() const {
   MessageWrapper message = BaseReplicationMessage::ToMessageWrapper();
   message.Put(key_batch_id, batch_id_);
-  message.Put(key_contents, MessageWrapper::ToCbor(contents_));
+  message.Put(key_contents, contents_);
   return message;
 }
 
 RecordsBatchMsg::RecordsBatchMsg(const MessageWrapper &message)
     : BaseReplicationMessage(message),
       batch_id_(message.Get<record_batch_id_t>(key_batch_id)),
-      contents_(MessageWrapper::FromCbor(message.Get<std::vector<uint8_t>>(key_contents))) {}
+      contents_(message.Get<std::string>(key_contents)) {}
 
 RecordsBatchMsg::RecordsBatchMsg(ReplicationMessageMetadata metadata, record_batch_id_t batch_id,
                                  storage::BufferedLogWriter *buffer)
