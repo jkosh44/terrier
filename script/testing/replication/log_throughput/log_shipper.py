@@ -38,6 +38,7 @@ class LogShipper(ImposterNode):
         ImposterNode.__init__(self, primary_identity, primary_messenger_port, primary_replication_port)
 
         self.log_file = log_file
+        self.log_file_len = 0
 
         # Replica connection used to send messages to replica
         self.replica_dealer_socket = self._create_sending_dealer_socket(self.context, replica_identity,
@@ -81,11 +82,8 @@ class LogShipper(ImposterNode):
                 # This is a bit naive, but we want to ship logs as fast as possible and not spend too long every
                 # iteration checking for dropped messages
                 if idx % 1000 == 0 and idx != 0:
-                    LOG.info(f"Shipping log number {idx}")
+                    LOG.info(f"Shipping log number {idx} out of {self.log_file_len}")
                     self.retry_pending_msgs()
-
-                idx += 1
-                size_bytes = f.read(SIZE_LENGTH)
 
         LOG.info("Waiting for replica to ACK all messages")
 
@@ -105,11 +103,13 @@ class LogShipper(ImposterNode):
         f
             file contain log record messages
         """
+        f.seek(0)
         size_bytes = f.read(SIZE_LENGTH)
         while size_bytes:
             size = int.from_bytes(size_bytes, ENDIAN)
-            yield f.read(size)
+            message = f.read(size)
             size_bytes = f.read(SIZE_LENGTH)
+            yield message
 
     def retry_pending_msgs(self):
         """
