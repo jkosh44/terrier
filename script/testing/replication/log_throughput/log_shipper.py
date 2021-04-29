@@ -1,5 +1,6 @@
 from threading import Thread
 from time import sleep
+from typing import BinaryIO
 
 import zmq
 from zmq import Socket
@@ -50,7 +51,10 @@ class LogShipper(ImposterNode):
         self.recv_thread.start()
 
     def setup(self):
-        pass
+        self.log_file_len = 0
+        with open(self.log_file, "rb") as f:
+            for _ in self.read_messages(f):
+                self.log_file_len += 1
 
     def run(self):
         self.ship()
@@ -58,18 +62,15 @@ class LogShipper(ImposterNode):
     def ship(self):
         """
         Send log records to replica.
-        This method guarantees that the replica node receives all log messages, however it does not guarantee or wait
-        for the replica to apply all transactions sent. If you send enough log messages then enough data should be
-        generated so that this doesn't matter. If this ever does become an issue then you can keep track of the
-        TXN APPLIED messages and block until all transactions have been applied.
+        This method guarantees that the replica node receives all log messages, however it does not guarantee that the
+        replica has applied all transactions sent. It attempts to wait for the replica to apply all transactions by
+        waiting for a gap longer than 5 seconds in between TXN APPLIED messages (see recv_thread_action()). If we need
+        something more precise then you can keep track of the TXN APPLIED messages and block until all transactions that
+        were sent have been applied.
         """
         LOG.info("Shipping logs to replica")
-        with open(self.log_file, 'rb') as f:
-            size_bytes = f.read(SIZE_LENGTH)
-            idx = 0
-            while size_bytes:
-                size = int.from_bytes(size_bytes, ENDIAN)
-                message = f.read(size)
+        with open(self.log_file, "rb") as f:
+            for idx, message in enumerate(self.read_messages(f)):
                 # Check and dispose of ACKs
                 if self.has_pending_messages(self.replica_dealer_socket, 0):
                     self.recv_log_record_ack()
@@ -94,7 +95,26 @@ class LogShipper(ImposterNode):
 
         LOG.info("Log shipping has completed")
 
+    @staticmethod
+    def read_messages(f: BinaryIO):
+        """
+        Reads in messages from log file
+
+        Parameters
+        ----------
+        f
+            file contain log record messages
+        """
+        size_bytes = f.read(SIZE_LENGTH)
+        while size_bytes:
+            size = int.from_bytes(size_bytes, ENDIAN)
+            yield f.read(size)
+            size_bytes = f.read(SIZE_LENGTH)
+
     def retry_pending_msgs(self):
+        """
+        Retry all pending messages
+        """
         # Drain ACKs
         while self.has_pending_messages(self.replica_dealer_socket, 0):
             self.recv_log_record_ack()
@@ -125,6 +145,11 @@ class LogShipper(ImposterNode):
         while self.running:
             if self.has_pending_messages(self.router_socket, 1):
                 self.recv_txn_applied_msg()
+
+        # Wait for all txn applied messages
+        LOG.info("Waiting for replica to apply all transaction")
+        while self.has_pending_messages(self.router_socket, 60000):
+            self.recv_txn_applied_msg()
         self.teardown_router_socket()
         self.recv_context.destroy()
 
