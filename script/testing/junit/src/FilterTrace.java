@@ -1,11 +1,13 @@
-import java.io.*;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
-import moglib.*;
+import moglib.Constants;
+import moglib.MogDb;
+import moglib.MogSqlite;
 
 /**
  * class that filter out desired trace
@@ -14,28 +16,42 @@ import moglib.*;
 public class FilterTrace {
     public static void main(String[] args) throws Throwable {
         System.out.println("Working Directory = " + System.getProperty("user.dir"));
-        String path = args[0];
-        File file = new File(path);
-        System.out.println("File path: " + path);
-        MogSqlite mog = new MogSqlite(file);
-        // create output file
-        File outputFile = new File(Constants.DEST_DIR, args[5]);
-        FileWriter writer = new FileWriter(outputFile);
+
+        String inputFilePath = args[0];
+        String jdbcUrl = args[1];
+        String user = args[2];
+        String password = args[3];
         String[] skip_list = args[4].split(",");
+
+        File file = new File(inputFilePath);
+        System.out.println("File path: " + inputFilePath);
+
         for(String i: skip_list){
             System.out.println(i);
         }
-        boolean skip_flag = false;
-        // open connection to postgresql database with jdbc
-        MogDb db = new MogDb(args[1], args[2], args[3]);
-        Connection conn = db.getDbTest().newConn();
-        List<String> tab = getAllExistingTableName(mog,conn);
-        removeExistingTable(tab,conn);
 
+        MogSqlite mog = new MogSqlite(file);
+        MogDb db = new MogDb(jdbcUrl, user, password);
+
+        // create output file
+        File outputFile = new File(Constants.DEST_DIR, args[5]);
+
+        try(
+            Connection conn = db.getDbTest().newConn();
+            FileWriter writer = new FileWriter(outputFile)
+        ) {
+            TestUtility.removeExistingTable(mog, conn);
+            filterTrace(mog, skip_list, conn, writer);
+        }
+    }
+
+    private static void filterTrace(MogSqlite mog, String[] skip_list, Connection conn,
+        FileWriter writer) throws Exception {
+        boolean skip_flag = false;
         while (mog.next()) {
             String cur_sql = mog.sql.trim();
-            for(int i=0; i<mog.comments.size();i++){
-                if(mog.comments.get(i).contains(Constants.SKIPIF)||mog.comments.get(i).contains(Constants.ONLYIF)){
+            for(String comment : mog.comments) {
+                if (comment.contains(Constants.SKIPIF) || comment.contains(Constants.ONLYIF)) {
                     skip_flag = true;
                     break;
                 }
@@ -46,7 +62,7 @@ public class FilterTrace {
                 continue;
             }
             // the code below remove the queries that contain any skip keyword
-            for(String skip_word:skip_list) {
+            for(String skip_word : skip_list) {
                 if (cur_sql.contains(skip_word)) {
                     skip_flag = true;
                     break;
@@ -57,10 +73,10 @@ public class FilterTrace {
                 mog.comments.clear();
                 continue;
             }
-            writeToFile(writer, mog.queryFirstLine);
-            writeToFile(writer, cur_sql);
+            TestUtility.writeToFile(writer, mog.queryFirstLine);
+            TestUtility.writeToFile(writer, cur_sql);
             if(mog.queryFirstLine.contains(Constants.QUERY)){
-                writeToFile(writer, Constants.SEPARATION);
+                TestUtility.writeToFile(writer, Constants.SEPARATION);
                 try{
                     Statement statement = conn.createStatement();
                     statement.execute(cur_sql);
@@ -69,33 +85,32 @@ public class FilterTrace {
                     if(res.size()>0){
                         if(res.size()<Constants.DISPLAY_RESULT_SIZE) {
                             for(String i:mog.queryResults){
-                                writeToFile(writer, i);
+                                TestUtility.writeToFile(writer, i);
                             }
                         }else {
                             String hash = TestUtility.getHashFromDb(res);
                             String queryResult = res.size() + " values hashing to " + hash;
-                            writeToFile(writer, queryResult);
+                            TestUtility.writeToFile(writer, queryResult);
                         }
                     }
                 }catch(Throwable e){
-                    throw new Throwable(e.getMessage() + ": " + cur_sql);
+                    throw new Exception(e.getMessage() + ": " + cur_sql);
                 }
             }else{
                 try{
                     Statement statement = conn.createStatement();
                     statement.execute(cur_sql);
                 }catch(Throwable e){
-                    throw new Throwable(e.getMessage() + ": " + cur_sql);
+                    throw new Exception(e.getMessage() + ": " + cur_sql);
                 }
             }
             writer.write('\n');
             mog.comments.clear();
             mog.queryResults.clear();
         }
-        writer.close();
-        conn.close();
     }
-    public static int getFrequency(String sql, String keyword){
+
+    private static int getFrequency(String sql, String keyword){
         int num = 0;
         String[] arr = sql.split(" ");
         for(String i:arr){
@@ -104,25 +119,5 @@ public class FilterTrace {
             }
         }
         return num;
-    }
-    public static void writeToFile(FileWriter writer, String str) throws IOException {
-        writer.write(str);
-        writer.write('\n');
-    }
-
-    public static void removeExistingTable(List<String> tab, Connection connection) throws SQLException {
-        for(String i:tab){
-            Statement st = connection.createStatement();
-            String sql = "DROP TABLE IF EXISTS " + i + " CASCADE";
-            st.execute(sql);
-        }
-    }
-    public static List<String> getAllExistingTableName(MogSqlite mog,Connection connection) throws SQLException {
-        Statement st = connection.createStatement();
-        String getTableName = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
-        st.execute(getTableName);
-        ResultSet rs = st.getResultSet();
-        List<String> res = mog.processResults(rs);
-        return res;
     }
 }

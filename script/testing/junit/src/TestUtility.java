@@ -1,13 +1,6 @@
+import static org.junit.Assert.assertEquals;
 
-/**
- * Base class (helper functions) for prepared statement tests
- */
-
-import moglib.MogUtil;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,13 +8,17 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.ResultSetMetaData;
-import java.util.ArrayList;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Properties;
-import static org.junit.Assert.assertEquals;
+import moglib.MogSqlite;
+import moglib.MogUtil;
 
+/**
+ * Helper functions for prepared statement tests
+ */
 public class TestUtility {
     public static Connection makeDefaultConnection() throws SQLException {
         return makeConnection("localhost", 15721, "noisepage");
@@ -32,7 +29,7 @@ public class TestUtility {
         props.setProperty("user", username);
         props.setProperty("prepareThreshold", "0"); // suppress switchover to binary protocol
 
-        // Set prepferQueryMode
+        // Set preferQueryMode
         String preferQueryMode = System.getenv("NOISEPAGE_QUERY_MODE");
         if (preferQueryMode == null || preferQueryMode.isEmpty()) {
             // Default as "simple" if NOISEPAGE_QUERY_MODE is not specified
@@ -49,8 +46,7 @@ public class TestUtility {
         }
 
         String url = String.format("jdbc:postgresql://%s:%d/", host, port);
-        Connection conn = DriverManager.getConnection(url, props);
-        return conn;
+        return DriverManager.getConnection(url, props);
     }
 
     /**
@@ -122,12 +118,8 @@ public class TestUtility {
     public void checkStringRow(ResultSet rs, String[] columns, String[] expected) throws SQLException {
         assertEquals(columns.length, expected.length);
         for (int i = 0; i < columns.length; i++) {
-            String val = (String) rs.getObject(columns[i]);
-            if (expected[i] == null) {
-                assertEquals(expected[i], val);
-            } else {
-                assertEquals(expected[i], val);
-            }
+            String val = rs.getString(columns[i]);
+            assertEquals(expected[i], val);
         }
     }
 
@@ -146,8 +138,8 @@ public class TestUtility {
      */
     public void setValues(PreparedStatement pstmt, int[] values) throws SQLException {
         int col = 1;
-        for (int i = 0; i < values.length; i++) {
-            pstmt.setInt(col++, (int) values[i]);
+        for (int value : values) {
+            pstmt.setInt(col++, value);
         }
     }
 
@@ -170,4 +162,28 @@ public class TestUtility {
         String hex = MogUtil.bytesToHex(byteArr);
         return hex.toLowerCase();
     }
+
+  public static void writeToFile(FileWriter writer, String str) throws IOException {
+    writer.write(str);
+    writer.write('\n');
+  }
+
+  public static void removeExistingTable(MogSqlite mog, Connection connection)
+      throws SQLException {
+    List<String> tab = getAllExistingTableName(mog, connection);
+    for (String i : tab) {
+      Statement st = connection.createStatement();
+      String sql = "DROP TABLE IF EXISTS " + i + " CASCADE";
+      st.execute(sql);
+    }
+  }
+
+  private static List<String> getAllExistingTableName(MogSqlite mog, Connection connection)
+      throws SQLException {
+    Statement st = connection.createStatement();
+    String getTableName = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
+    st.execute(getTableName);
+    ResultSet rs = st.getResultSet();
+    return mog.processResults(rs);
+  }
 }
