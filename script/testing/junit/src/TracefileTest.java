@@ -1,23 +1,21 @@
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.BufferedReader;
-
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestFactory;
-import org.junit.jupiter.api.DynamicTest;
-import org.junit.jupiter.api.function.Executable;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import moglib.Constants;
 import moglib.MogSqlite;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.function.Executable;
 
 /**
  * The Logger class implements a dummy logger that,
@@ -382,7 +380,7 @@ public class TracefileTest {
         final int actualCount) {
         // If checkExpectedLength is `false` we elide the check entirely
         // TODO(Kyle): This logic is insane, why do we do this at all?
-        return checkExpectedLength ? (expectedCount == actualCount) : true;
+        return !checkExpectedLength || (expectedCount == actualCount);
     }
 
     /**
@@ -409,41 +407,29 @@ public class TracefileTest {
         // try comparing the hash
         if (!actualHash.equals(expectedHash)) {
             // if hash doesn't match
-            if (resultCountsMatch) {
-                // If result counts match, we cast the double to int to
-                // compare again (hack for float precision errors)
-                List<String> updatedResults = new ArrayList<>();
-                for (final String i : results) {
-                    try {
-                        final Integer value
-                            = Integer.valueOf(
-                                (int) Math.round(Double.parseDouble(i)));
-                        updatedResults.add(value.toString());
-                    } catch (Exception ex) {
-                        updatedResults.add(i);
-                    }
+            // If result counts match, we cast the double to int to
+            // compare again (hack for float precision errors)
+            List<String> updatedResults = new ArrayList<>();
+            for (final String i : results) {
+                try {
+                    final long value
+                        = Math.round(Double.parseDouble(i));
+                    updatedResults.add(Long.toString(value));
+                } catch (Exception ex) {
+                    updatedResults.add(i);
                 }
-                final String updatedHash
-                    = TestUtility.getHashFromDb(updatedResults);
-                if (!updatedHash.equals(expectedHash)) {
-                    StringBuilder builder = new StringBuilder();
-                    builder.append(message);
-                    builder.append("\nExpected: ");
-                    builder.append(expectedHash);
-                    builder.append("\nActual: ");
-                    builder.append(updatedHash);
-                    builder.append('\n');
-                    builder.append(results);
-                    throw new RuntimeException(builder.toString());
-                }
-            } else {
-                // Hashes and result counts disagree; throw
+            }
+            final String updatedHash
+                = TestUtility.getHashFromDb(updatedResults);
+            if (!updatedHash.equals(expectedHash)) {
                 StringBuilder builder = new StringBuilder();
                 builder.append(message);
                 builder.append("\nExpected: ");
                 builder.append(expectedHash);
                 builder.append("\nActual: ");
-                builder.append(actualHash);
+                builder.append(updatedHash);
+                builder.append('\n');
+                builder.append(results);
                 throw new RuntimeException(builder.toString());
             }
         }
@@ -496,16 +482,14 @@ public class TracefileTest {
      * should be checked, `false` otherwise
      */
     private static boolean getCheckExpectedLength() {
-        // TODO(Kyle): I just ripped this logic out of the above
-        // function, but this could still really use a deeper refactor
-        if (mog.queryResults.size() == 0
-        || (!mog.queryResults.get(0).contains(Constants.VALUES))) {
-            return false;
-        }
+        return !mog.queryResults.isEmpty()
+            && mog.queryResults.get(0).contains(Constants.VALUES)
+            && isInt(mog.queryResults.get(0).split(" ")[0]);
+    }
 
-        final String[] sentence = mog.queryResults.get(0).split(" ");
+    private static boolean isInt(String s) {
         try {
-            Integer.parseInt(sentence[0]);
+            Integer.parseInt(s);
         } catch (Exception e) {
             return true;
         }

@@ -3,11 +3,9 @@
  * Base class (helper functions) for prepared statement tests
  */
 
-import moglib.MogUtil;
+import static org.junit.Assert.assertEquals;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,12 +13,13 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.ResultSetMetaData;
-import java.util.ArrayList;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Properties;
-import static org.junit.Assert.assertEquals;
+import moglib.MogSqlite;
+import moglib.MogUtil;
 
 public class TestUtility {
     public static Connection makeDefaultConnection() throws SQLException {
@@ -169,5 +168,34 @@ public class TestUtility {
         byte[] byteArr = md.digest();
         String hex = MogUtil.bytesToHex(byteArr);
         return hex.toLowerCase();
+    }
+
+    public static void removeAllExistingTables(MogSqlite mog, Connection connection)
+        throws SQLException {
+        List<String> tab = getAllExistingTableName(mog, connection);
+        for (String i : tab) {
+            Statement st = connection.createStatement();
+            String sql = "DROP TABLE IF EXISTS " + i + " CASCADE";
+            st.execute(sql);
+        }
+    }
+
+    public static List<String> getAllExistingTableName(MogSqlite mog, Connection connection)
+        throws SQLException {
+        Statement st = connection.createStatement();
+        String getTableName = "SELECT tablename FROM pg_tables WHERE schemaname = 'public';";
+        st.execute(getTableName);
+        ResultSet rs = st.getResultSet();
+        return mog.processResults(rs);
+    }
+
+    public static void writeToFile(FileWriter writer, String str) throws IOException {
+        writer.write(str + '\n');
+    }
+
+    public static void writeToFile(FileWriter writer, String... strings) throws IOException {
+        for(String str : strings) {
+            writeToFile(writer, str);
+        }
     }
 }
